@@ -1,0 +1,98 @@
+# CLASSIFICATION OF ACTIVITY PERFORMANCE 
+
+## Abstract
+This report trains models to classify barbell lifts into 5 different fashions. This data was obtained by having 6 young health participants perform one set of 10 repetitions of the Unilateral Dumbell Biceps Curl in five different fashions, classified as: A, B, C, D and E.   
+
+## Loading Data
+Loading required R packages, and reading the provided training data set.
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(rattle)
+library(randomForest)
+library(rpart.plot)
+
+## Download and read the training and testing dataset
+if(!file.exists("training")){
+    dir.create("training")
+}
+fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl1, destfile = "./training/training.csv", method = "curl")
+training <- read.csv("./training/training.csv", sep = ",")
+```
+
+## Splitting Data into Training and Cross-Validation Set
+I split the data into training and cross-validation set. I have put 70% of the data into the train set and 30% into the cross-validation set.
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+train <- training[inTrain,]
+cv <- training[-inTrain,]
+```
+
+
+## Pre-Processing the Data
+Next I carry out some pre-processing on the train dataset. I remove the variables that have near zero variance and so will not vary between the classes. Then I calculate the fraction of missing data in each column.   
+```{r}
+## remove nearZeroVar variables
+nsv <- nearZeroVar(train, saveMetrics = FALSE)
+train <- train[,-c(nsv)]
+
+## Calculate the fraction of missing data in each column
+miss <- c()
+for(i in 1:ncol(train)){
+    miss[i] <- sum(is.na(train[,i]))/nrow(train)
+}
+
+missing <- which(miss>0)
+
+train <- train[,-missing]
+
+train <- train[,-c(1:7)]
+```
+
+It was found that the columns with missing data had ~99% of the data missing, so I removed those columns. I also removed the first 7 columns which where just ID coulmns.
+
+## Model Selection
+First I trained a classification tree model, and calculated its accuracy in predicting the train set.
+
+### Classification Tree
+```{r, cache = TRUE}
+set.seed(1334)
+## Classification Tree
+modFit <- train(classe ~., method= "rpart", data = train)
+fancyRpartPlot(modFit$finalModel)
+predTrain <- predict(modFit)
+confusionMatrix(predTrain, train$classe)
+```
+
+Using the classification tree model, the accuracy on the train set is ~50%. This is unacceptably low and so will not be used. Next I trained a randomForest model, and calculated its accuracy in predicting the train set.
+
+### RandomForest
+```{r, cache=TRUE}
+## Random Forest 
+modFit2 <- randomForest(classe~., data=train)
+predTrain2 <- predict(modFit2)
+confusionMatrix(predTrain2, train$classe)
+```
+
+Using the randomForest model, the accuracy on the train set is ~99%. This is a very good accuracy, and so modFit2 is the best model for this data.
+
+## Estimating model out-of-sample error 
+Using the cross validation set, and the best model (Random Forest, modFit2) I have calculated the expected accuracy of the model.
+
+```{r}
+cv <- cv[,-c(nsv)]
+cv <- cv[,-missing]
+cv <- cv[,-c(1:7)]
+
+predcv <- predict(modFit2, cv)
+confusionMatrix(predcv, cv$classe)
+```
+
+Based on the models accuracy in predicting the classes, the expected out-of-sample error is less than 0.01%
+
+## Conclusion
+This randomForest model can be used to predict a testing set with expected high accuracy.
+
+
+
+
